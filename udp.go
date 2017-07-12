@@ -1,48 +1,65 @@
 package printserver
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 )
 
-func runUDP(addr string) {
+// PrintUDP represents printer for UDP protocol
+type PrintUDP struct {
+	outStream io.Writer
+	errStream io.Writer
+	interval  time.Duration
+	localAddr chan string
+}
+
+// Protocol return supported protocol
+func (p *PrintUDP) Protocol() { return "udp" }
+
+// Listen are to wait receive a UDP packet and display that
+func (p *PrintUDP) Listen(ctx context.Context, addr string) error {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer l.Close()
 
-	go func() {
-		t := time.NewTicker(time.Second)
-		for {
-			select {
-			case <-t.C:
-				bytes := make([]byte, 4096)
-				_, _, err := l.ReadFrom(bytes)
-				if err != nil {
-					panic(err)
-				}
-				fmt.Printf("%s\n", bytes)
-			}
-		}
-	}()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	if p.localAddr != nil {
+		p.localAddr <- l.LocalAddr().String()
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		sig := <-sigCh
-		fmt.Println("receive signal: ", sig.String())
-		wg.Done()
+		t := time.NewTicker(p.interval)
+		for {
+			select {
+			case <-t.C:
+				l.SetDeadline(time.Now().Add(10 * time.Millisecond))
+				bytes := make([]byte, 4096)
+				_, _, err := l.ReadFrom(bytes)
+				if err != nil {
+					// skip when timeout
+					if op, ok := err.(*net.OpError); ok && op.Timeout() {
+						continue
+					}
+					fmt.Fprintf(p.errStream, "failed to read packet: %v\n", err)
+					continue
+				}
+				fmt.Fprintf(p.outStream, "%s\n", bytes)
+			case <-ctx.Done():
+				t.Stop()
+				wg.Done()
+				return
+			}
+		}
 	}()
 
 	fmt.Println("Listening UDP packet at " + l.LocalAddr().String())
 	wg.Wait()
+	return nil
 }

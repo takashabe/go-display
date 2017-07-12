@@ -1,0 +1,76 @@
+package printserver
+
+import (
+	"bytes"
+	"context"
+	"net"
+	"os"
+	"reflect"
+	"runtime"
+	"testing"
+	"time"
+)
+
+func TestWriteUDP(t *testing.T) {
+	var buf bytes.Buffer
+	p := &PrintUDP{
+		outStream: &buf,
+		errStream: &buf,
+		interval:  10 * time.Millisecond,
+		localAddr: make(chan string, 1),
+	}
+
+	// write to udp server
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Listen(ctx, ":0")
+
+	// wait to write in udp server
+	addr := <-p.localAddr
+	sendMessage := []byte("test")
+	time.Sleep(10 * time.Millisecond)
+	writeUDP(t, addr, sendMessage)
+	time.Sleep(10 * time.Millisecond)
+
+	receivedMessage := make([]byte, len(sendMessage))
+	_, err := buf.Read(receivedMessage)
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if !reflect.DeepEqual(receivedMessage, sendMessage) {
+		t.Errorf("want message %s, got %s", sendMessage, receivedMessage)
+	}
+}
+
+func writeUDP(t *testing.T, addr string, message []byte) {
+	c, err := net.Dial("udp", addr)
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+
+	_, err = c.Write(message)
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+}
+
+func TestCancelUDP(t *testing.T) {
+	p := &PrintUDP{
+		outStream: os.Stdout,
+		errStream: os.Stderr,
+		interval:  10 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go p.Listen(ctx, ":0")
+	time.Sleep(50 * time.Millisecond)
+	beforeCancel := runtime.NumGoroutine()
+
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+	afterCancel := runtime.NumGoroutine()
+
+	if beforeCancel <= afterCancel {
+		t.Errorf("want num goroutine less than %d, got %d", beforeCancel, afterCancel)
+	}
+}
