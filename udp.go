@@ -18,7 +18,7 @@ type PrintUDP struct {
 }
 
 // Protocol return supported protocol
-func (p *PrintUDP) Protocol() { return "udp" }
+func (p *PrintUDP) Protocol() string { return "udp" }
 
 // Listen are to wait receive a UDP packet and display that
 func (p *PrintUDP) Listen(ctx context.Context, addr string) error {
