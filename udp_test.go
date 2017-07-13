@@ -3,7 +3,6 @@ package printserver
 import (
 	"bytes"
 	"context"
-	"net"
 	"os"
 	"reflect"
 	"runtime"
@@ -29,7 +28,7 @@ func TestWriteUDP(t *testing.T) {
 	addr := <-p.localAddr
 	sendMessage := []byte("test")
 	time.Sleep(10 * time.Millisecond)
-	writeUDP(t, addr, sendMessage)
+	writeClient(t, p.Protocol(), addr, sendMessage)
 	time.Sleep(10 * time.Millisecond)
 
 	receivedMessage := make([]byte, len(sendMessage))
@@ -39,18 +38,6 @@ func TestWriteUDP(t *testing.T) {
 	}
 	if !reflect.DeepEqual(receivedMessage, sendMessage) {
 		t.Errorf("want message %s, got %s", sendMessage, receivedMessage)
-	}
-}
-
-func writeUDP(t *testing.T, addr string, message []byte) {
-	c, err := net.Dial("udp", addr)
-	if err != nil {
-		t.Fatalf("want no error, got %v", err)
-	}
-
-	_, err = c.Write(message)
-	if err != nil {
-		t.Fatalf("want no error, got %v", err)
 	}
 }
 
