@@ -77,7 +77,7 @@ func (c *CLI) Run(args []string) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err := printer.Listen(ctx, param.addr)
+	err = printer.Listen(ctx, param.addr)
 	if err != nil {
 		fmt.Fprintf(c.ErrStream, "failed to Listen at %s protocol", printer.Protocol())
 		return ExitCodeListenError
