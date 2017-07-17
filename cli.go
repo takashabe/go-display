@@ -16,7 +16,6 @@ const (
 	ExitCodeError = 10 + iota
 	ExitCodeParseError
 	ExitCodeInvalidArgsError
-	ExitCodeListenError
 )
 
 // default parameters
@@ -77,10 +76,10 @@ func (c *CLI) Run(args []string) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = printer.Listen(ctx, param.addr)
-	if err != nil {
+	listenSignal(cancel)
+	if err := printer.Listen(ctx, param.addr); err != nil {
 		fmt.Fprintf(c.ErrStream, "failed to Listen at %s protocol", printer.Protocol())
-		return ExitCodeListenError
+		return ExitCodeError
 	}
 
 	return ExitCodeOK
