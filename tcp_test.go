@@ -1,8 +1,8 @@
 package printserver
 
 import (
-	"bytes"
 	"context"
+	"io"
 	"os"
 	"reflect"
 	"runtime"
@@ -11,11 +11,13 @@ import (
 )
 
 func TestWriteTCP(t *testing.T) {
-	var buf bytes.Buffer
+	pr, pw := io.Pipe()
+	defer pr.Close()
+	defer pw.Close()
+
 	p := &PrintTCP{
-		outStream: &buf,
-		errStream: &buf,
-		interval:  10 * time.Millisecond,
+		outStream: pw,
+		errStream: pw,
 		localAddr: make(chan string, 1),
 	}
 
@@ -32,7 +34,7 @@ func TestWriteTCP(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	receivedMessage := make([]byte, len(sendMessage))
-	_, err := buf.Read(receivedMessage)
+	_, err := pr.Read(receivedMessage)
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
@@ -45,7 +47,6 @@ func TestCancelTCP(t *testing.T) {
 	p := &PrintTCP{
 		outStream: os.Stdout,
 		errStream: os.Stderr,
-		interval:  10 * time.Millisecond,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
