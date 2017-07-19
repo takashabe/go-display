@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"time"
 )
 
 // Exit codes. used only in Run()
@@ -58,14 +57,12 @@ func (c *CLI) Run(args []string) int {
 		printer = &PrintTCP{
 			outStream: c.OutStream,
 			errStream: c.ErrStream,
-			interval:  time.Second,
 			localAddr: make(chan string, 1),
 		}
 	case "udp":
 		printer = &PrintUDP{
 			outStream: c.OutStream,
 			errStream: c.ErrStream,
-			interval:  time.Second,
 			localAddr: make(chan string, 1),
 		}
 	default:

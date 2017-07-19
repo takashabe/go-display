@@ -52,7 +52,6 @@ func (p *PrintHTTP) Listen(ctx context.Context, addr string) error {
 
 	fmt.Println("Listening HTTP request at " + l.Addr().String())
 	wg.Wait()
-
 	return nil
 }
 
