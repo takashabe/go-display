@@ -13,7 +13,6 @@ import (
 type PrintTCP struct {
 	outStream io.Writer
 	errStream io.Writer
-	interval  time.Duration
 	localAddr chan string
 }
 
@@ -39,37 +38,35 @@ func (p *PrintTCP) Listen(ctx context.Context, addr string) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		t := time.NewTicker(p.interval)
-		for {
-			select {
-			case <-t.C:
-				l.SetDeadline(time.Now().Add(10 * time.Millisecond))
-				conn, err := l.Accept()
-				if err != nil {
-					// skip when timeout
-					if op, ok := err.(*net.OpError); ok && op.Timeout() {
-						continue
-					}
-					fmt.Fprintf(p.errStream, "failed to connection: %v\n", err)
-					continue
-				}
-
-				bytes := make([]byte, 4096)
-				_, err = conn.Read(bytes)
-				if err != nil {
-					fmt.Fprintf(p.errStream, "failed to read packet: %v\n", err)
-				} else {
-					fmt.Fprintf(p.outStream, "%s\n", bytes)
-				}
-			case <-ctx.Done():
-				t.Stop()
-				wg.Done()
-				return
-			}
-		}
+		go p.readListener(l)
+		<-ctx.Done()
+		wg.Done()
 	}()
 
 	fmt.Println("Listening TCP connection at " + l.Addr().String())
 	wg.Wait()
 	return nil
+}
+
+func (p *PrintTCP) readListener(l net.Listener) error {
+	for {
+		var (
+			errCnt = 0
+			maxCnt = 20
+		)
+
+		conn, err := l.Accept()
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if errCnt < maxCnt {
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+			}
+			fmt.Fprintf(p.errStream, "%s\n", err.Error())
+			return err
+		}
+		io.Copy(p.outStream, conn)
+		conn.Close()
+	}
 }

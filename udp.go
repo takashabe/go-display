@@ -13,7 +13,6 @@ import (
 type PrintUDP struct {
 	outStream io.Writer
 	errStream io.Writer
-	interval  time.Duration
 	localAddr chan string
 }
 
@@ -22,44 +21,50 @@ func (p *PrintUDP) Protocol() string { return "udp" }
 
 // Listen are to wait receive a UDP packet and display that
 func (p *PrintUDP) Listen(ctx context.Context, addr string) error {
-	l, err := net.ListenPacket("udp", addr)
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return err
 	}
-	defer l.Close()
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 
 	if p.localAddr != nil {
-		p.localAddr <- l.LocalAddr().String()
+		p.localAddr <- conn.LocalAddr().String()
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		t := time.NewTicker(p.interval)
-		for {
-			select {
-			case <-t.C:
-				l.SetDeadline(time.Now().Add(10 * time.Millisecond))
-				bytes := make([]byte, 4096)
-				_, _, err := l.ReadFrom(bytes)
-				if err != nil {
-					// skip when timeout
-					if op, ok := err.(*net.OpError); ok && op.Timeout() {
-						continue
-					}
-					fmt.Fprintf(p.errStream, "failed to read packet: %v\n", err)
-					continue
-				}
-				fmt.Fprintf(p.outStream, "%s\n", bytes)
-			case <-ctx.Done():
-				t.Stop()
-				wg.Done()
-				return
-			}
-		}
+		go p.readConn(conn)
+		<-ctx.Done()
+		wg.Done()
 	}()
 
-	fmt.Println("Listening UDP packet at " + l.LocalAddr().String())
+	fmt.Println("Listening UDP packet at " + conn.LocalAddr().String())
 	wg.Wait()
 	return nil
+}
+
+func (p *PrintUDP) readConn(l net.Conn) error {
+	for {
+		var (
+			errCnt = 0
+			maxCnt = 20
+		)
+
+		_, err := io.Copy(p.outStream, l)
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if errCnt < maxCnt {
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+			}
+			fmt.Fprintf(p.errStream, "%s\n", err.Error())
+			return err
+		}
+	}
 }
