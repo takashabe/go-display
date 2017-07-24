@@ -1,4 +1,4 @@
-package printserver
+package display
 
 import (
 	"context"

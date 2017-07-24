@@ -3,11 +3,11 @@ package main
 import (
 	"os"
 
-	printserver "github.com/takashabe/go-printserver"
+	"github.com/takashabe/go-display"
 )
 
 func main() {
-	cli := &printserver.CLI{
+	cli := &display.CLI{
 		OutStream: os.Stdout,
 		ErrStream: os.Stderr,
 	}
